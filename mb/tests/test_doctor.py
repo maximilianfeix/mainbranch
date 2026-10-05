@@ -2156,3 +2156,46 @@ def test_doctor_repair_apply_plugin_migration_requires_claude_scope(tmp_path: Pa
     scoped = doctor_mod.repair_apply(repo=repo, all_agents=True)
     assert "plugin-wiring" in {action["id"] for action in scoped["applied_actions"]}
     assert engine_mod.plugin_wiring_status(repo)["wired"] is True
+
+
+def _version_update(installed: str, latest: str) -> dict[str, Any]:
+    # "current" so only doctor's own comparison decides (#1043).
+    return {
+        "installed": installed,
+        "latest": latest,
+        "minimum_supported": "0.1.0",
+        "severity": "current",
+        "command": "mb update",
+    }
+
+
+@pytest.mark.parametrize(
+    ("installed", "latest", "behind"),
+    [
+        ("0.6.3rc1", "0.6.3", True),
+        ("0.6.3", "0.6.3rc1", False),
+        ("0.6.3", "0.6.3", False),
+        ("0.6.2", "0.6.3", True),
+    ],
+)
+def test_doctor_version_check_orders_release_candidates(
+    monkeypatch, installed: str, latest: str, behind: bool
+) -> None:
+    # #1043: version_key drops the rc marker, so 0.6.3rc1 looked current
+    # next to 0.6.3; doctor has to order versions like mb update does.
+    monkeypatch.setattr(doctor_mod, "install_mode", lambda: "pipx")
+
+    check = doctor_mod._mainbranch_version_check(_version_update(installed, latest))
+
+    assert check["ok"] is not behind
+    if behind:
+        assert check["severity"] == "warn"
+        assert f"latest is {latest}" in check["detail"]
+
+
+def test_doctor_version_check_ignores_a_latest_it_cannot_read(monkeypatch) -> None:
+    monkeypatch.setattr(doctor_mod, "install_mode", lambda: "pipx")
+
+    check = doctor_mod._mainbranch_version_check(_version_update("0.6.3", "not-a-version"))
+
+    assert check["ok"] is True
