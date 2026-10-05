@@ -37,9 +37,10 @@ from mb import validate as validate_mod
 from mb.engine import install_mode, link_status
 from mb.freshness import (
     MODE_NEUTRAL_UPDATE_TEXT,
+    checked_release_version,
+    compare_versions,
     format_update_alert,
     package_update_status,
-    version_key,
 )
 from mb.migrate import (
     LATEST_SCHEMA_VERSION,
@@ -732,7 +733,12 @@ def _mainbranch_version_check(update: dict[str, Any]) -> dict[str, Any]:
             "severity": "error",
         }
 
-    if severity == "recommended" or (latest and version_key(latest) > version_key(installed)):
+    # compare_versions, not version_key: version_key drops the rc marker, so an
+    # rc install would look current next to its final release (#1043).
+    checked_latest = checked_release_version(latest)
+    if severity == "recommended" or (
+        checked_latest and compare_versions(checked_latest, installed) > 0
+    ):
         return {
             "name": "mainbranch-version",
             "ok": False,
