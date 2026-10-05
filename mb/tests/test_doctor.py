@@ -2199,3 +2199,18 @@ def test_doctor_version_check_ignores_a_latest_it_cannot_read(monkeypatch) -> No
     check = doctor_mod._mainbranch_version_check(_version_update("0.6.3", "not-a-version"))
 
     assert check["ok"] is True
+
+
+def test_doctor_shows_the_final_release_to_an_rc_install(monkeypatch) -> None:
+    # #1043 end to end: what package_update_status really hands doctor.
+    from mb.freshness import package_update_status
+
+    monkeypatch.setattr(doctor_mod, "install_mode", lambda: "pipx")
+    update = package_update_status(
+        None, installed_version="0.6.3rc1", latest_version="0.6.3", mode="pipx"
+    )
+
+    check = doctor_mod._mainbranch_version_check(update)
+
+    assert check["ok"] is False
+    assert "latest is 0.6.3" in check["detail"]
